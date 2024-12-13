@@ -1,0 +1,15 @@
+# PASTAS
+\baixados
+\temp
+\__pycache__
+\venv
+
+# ARQUIVOS
+*.log
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# TERMOS / PARTES DE NOMES DE ARQUIVOS
+*test*
