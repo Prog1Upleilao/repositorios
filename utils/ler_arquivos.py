@@ -75,7 +75,9 @@ def ler_txt(file_path:str, is_list:bool):
         with open(file_path, "r", encoding="utf-8") as arquivo:
             if is_list:
                 linhas = arquivo.readlines()
+                # 0031721-39.2022.8.26.0053
                 processos = [re.sub('[\W\_]+', '', l) for l in linhas]
+                processos = [l for l in processos if len(l) == 20]
                 return processos
             else:
                 texto = arquivo.read()

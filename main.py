@@ -1,9 +1,16 @@
 import os
 import re
+import time
 from datetime import datetime
 
 import pdfplumber
-import scraping.scrape as scrape
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from  openpyxl import load_workbook
+from openpyxl.styles import NamedStyle
+from openpyxl.worksheet.dimensions import ColumnDimension
+   
+import web_scrape.scrape as scrape
 import utils.ler_arquivos as leitura
 from utils.eventos import registrar_evento
 
@@ -13,7 +20,7 @@ def main():
     if not verificar_arquivos(app_dir):
         return False
 
-    file_path = os.path.join(app_dir, 'processos.txt')    
+    file_path = os.path.join(app_dir, 'arquivos', 'processos.txt')    
     processos = leitura.ler_txt(file_path, True)
     
     ler_dados_pdf(app_dir, processos)
@@ -61,28 +68,29 @@ def ler_dados_pdf(app_dir:str, processos:list):
     pdfs_files = [file for file in os.listdir(files_dir) if file.lower().endswith('.pdf')]
     pdfs_files.reverse()
 
-    for pdf in pdfs_files:
-        pdf_path = os.path.join(files_dir, pdf)
+    for nome_pdf in pdfs_files:
+        pdf_path = os.path.join(files_dir, nome_pdf)
         if not processos:
             break
         
         with pdfplumber.open(pdf_path) as pdf:
             precatorio = dict()
-            
+            precatorio['arquivo'] = nome_pdf
+
             for page in pdf.pages:
                 texto_pagina = page.extract_text_lines()
 
                 for linhas in texto_pagina:
                     texto = linhas['text']
 
-                    if len(precatorio) == 7:
+                    if len(precatorio) == 8:
                         valores_nao_nulos = all(valor is not None for valor in precatorio.values())
-                        if valores_nao_nulos:
-                            processo = re.sub('\D+', '', precatorio['num_autos'])
-                            if processo in processos:
-                                processos.remove(processo)
-                                precatorio.clear
-                        
+                        processo = re.sub('\D+', '', str(precatorio.get('num_autos')))
+                        if valores_nao_nulos and processo in processos:
+                            escrever_dados(app_dir, precatorio)
+                            processos.remove(processo)
+                            precatorio.clear
+                    
                     if re.match('^(ordem.*pagamento\:)', texto, flags=re.I):
                         ordem_pagamento = re.search('\d+', texto)
                         num_processo = re.search('\d{7}\-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}', texto)
@@ -124,8 +132,85 @@ def verificar_arquivos(app_dir:str):
     return com_arquivos
 
 
-def add_dados_em_excel():
-    pass
+def escrever_dados(app_dir:str, precatorio:dict):
+    # criar o arquivo na primeira chamada
+    file_path = os.path.join(app_dir, f'Relatório_{str(datetime.now().date())}.xlsx')
+    if not os.path.exists(file_path):
+        file_path = criar_arquivo_excel(app_dir)
+    
+    em_uso = True
+    while em_uso:
+        try:
+            # Tentativa de abrir o arquivo em modo exclusivo
+            with open(file_path, 'r+'):
+                em_uso = False
+        except IOError:
+            print('Feche o Arquivo para eu poder salvar novos dados')
+
+    # Carregar o arquivo existente
+    workbook = load_workbook(file_path)
+    # Verificar se a aba já existe
+    if not 'Dados' in workbook.sheetnames:
+        workbook.create_sheet(title='Dados')
+    sheet = workbook['Dados']
+
+    # Dados para adicionar
+    data_formatada = precatorio.get('data_protocolo')
+    new_data = [
+        precatorio.get('num_autos'),
+        precatorio.get('num_processo'),
+        precatorio.get('natureza'),
+        precatorio.get('ordem_orcamentaria'),
+        precatorio.get('suspenso'),
+        # precatorio.get('data_protocolo'),
+        data_formatada.strftime("%d/%m/%Y") if data_formatada else '',
+        precatorio.get('arquivo'),
+        precatorio.get('ordem_pagamento'),
+    ]
+    
+    # Identificar a próxima linha disponível
+    next_row = sheet.max_row + 1
+
+    # Adicionar os dados na próxima linha
+    for col_index, value in enumerate(new_data, start=1):
+        sheet.cell(row=next_row, column=col_index, value=value)
+
+    # Salvar as alterações
+    workbook.save(file_path)
+
+
+def criar_arquivo_excel(app_dir:str, num_file:str=''):
+    file_path = os.path.join(app_dir, f'Relatório_{str(datetime.now().date())}{num_file}.xlsx')
+    
+    # Criar o workbook e a planilha
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Dados'  # Nome da planilha
+
+    # Definir os rótulos das colunas
+    headers = ['Autos', 'Processo', 'Natureza', 'Ordem orçamentária', 'Suspenso?', 'Data do Protocolo', 'Arquivo', 'Ordem de Pagamento']
+
+    # Adicionar os rótulos com formatação em negrito
+    bold_font = Font(bold=True)
+    for col_index, header in enumerate(headers, start=1):
+        cell = sheet.cell(row=1, column=col_index, value=header)
+        cell.font = bold_font
+
+    # Definir largura específica para as colunas
+    column_widths = [24, 24, 17, 9, 9, 14, 37]  # Largura das colunas (ajuste conforme necessário)
+    for col_index, width in enumerate(column_widths, start=1):
+        column_letter = sheet.cell(row=1, column=col_index).column_letter
+        sheet.column_dimensions[column_letter].width = width
+
+    # Aplicar auto filtro aos rótulos
+    sheet.auto_filter.ref = f"A1:H1"  # Ajuste o intervalo conforme o número de colunas
+
+    # Congelar a primeira linha
+    sheet.freeze_panes = "A2"  # Congela a linha acima da célula especificada (neste caso, a linha 1)
+
+    # Salvar o arquivo Excel
+    workbook.save(file_path)
+    return file_path
 
 
 main()

@@ -10,6 +10,7 @@
 *.png
 *.jpg
 *.jpeg
+relat*
 
 # TERMOS / PARTES DE NOMES DE ARQUIVOS
 *test*
