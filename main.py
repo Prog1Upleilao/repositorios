@@ -1,39 +1,51 @@
 import os
 import re
-import time
+import sys
 from datetime import datetime
 
-import pdfplumber
+import fitz # pymupdf
+from rich import print
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from  openpyxl import load_workbook
-from openpyxl.styles import NamedStyle
-from openpyxl.worksheet.dimensions import ColumnDimension
-   
+
 import web_scrape.scrape as scrape
 import utils.ler_arquivos as leitura
 from utils.eventos import registrar_evento
+from version.metadata import print_project_information
 
 
 def main():
+    os.system('cls')
+    print_project_information()
     app_dir = os.path.dirname(os.path.abspath(__file__))
     if not verificar_arquivos(app_dir):
         return False
-
+    
+    # Lista os números dos processos para leitura
     file_path = os.path.join(app_dir, 'arquivos', 'processos.txt')    
     processos = leitura.ler_txt(file_path, True)
     
-    ler_dados_pdf(app_dir, processos)
-    return
-
-    captcha_path = os.path.join(app_dir, 'files', 'lista_captcha.xlsx')
-    entidades_path = os.path.join(app_dir, 'files', 'lista_entidades.xlsx')
-
+    # Lista os números dos captchas
+    captcha_path = os.path.join(app_dir, 'arquivos', 'lista_captcha.xlsx')
     captchas = leitura.ler_xlsx(captcha_path, 'lista', 'num')
+
+    # Lista as entidades que das unidades que serão baixadas
+    entidades_path = os.path.join(app_dir, 'arquivos', 'lista_entidades.xlsx')
     cod_entidades = leitura.ler_xlsx(entidades_path, 'dados', 'Código', 'Leitura', 'sim')
 
+    print('\n[bold cyan] -> Baixando arquivos PDFs\n')
+    # Realiza o download dos arquivos .PDFs
     scrape.main(app_dir, cod_entidades, captchas)
+    
+    print('[bold cyan] -> Descompactando arquivos\n')
+    # Descompacta e lê cada arquivo .PDF
     descompacta_arquivos(app_dir)
+
+    print('[bold cyan] -> Lendo arquivos baixados\n')
+    ler_dados_pdf(app_dir, processos)
+
+    print('[bold blue]***** FIM DO PROCESSO *****')
 
 
 def descompacta_arquivos(app_dir:str)->list:
@@ -41,9 +53,6 @@ def descompacta_arquivos(app_dir:str)->list:
     temp_path = os.path.join(app_dir, 'temp')
     downloads_path = os.path.expanduser("~/Downloads")
     os.makedirs(temp_path, exist_ok=True)
-
-    # Lista para armazenar informações sobre os arquivos .zip
-    pdf_files = []
     today_date = datetime.now().date()
 
     # Verifica todos os arquivos na pasta de downloads
@@ -58,64 +67,70 @@ def descompacta_arquivos(app_dir:str)->list:
                 leitura.descompactar_zip(file_path, temp_path)
 
 
-def ler_dados_pdf(app_dir:str, processos:list):
-    # Lê todos os arquivos da pasta 'temp'
+def ler_dados_pdf(app_dir: str, processos: list):
     files_dir = os.path.join(app_dir, 'temp')
-    if not os.path.exists(files_dir):
-        registrar_evento("Pasta Temp não existe")
+    if not os.path.exists(files_dir) or not processos:
+        registrar_evento()
         return False
-    
+
     pdfs_files = [file for file in os.listdir(files_dir) if file.lower().endswith('.pdf')]
-    pdfs_files.reverse()
-
-    for nome_pdf in pdfs_files:
+    
+    for i, nome_pdf in enumerate(pdfs_files):
         pdf_path = os.path.join(files_dir, nome_pdf)
-        if not processos:
-            break
+        com_devedora = None
         
-        with pdfplumber.open(pdf_path) as pdf:
+        print(f'[bold green]  Lendo arquivo {i+1}/{len(pdfs_files)} -> {nome_pdf}')
+        with fitz.open(pdf_path) as pdf:
+            pagina = 0
             precatorio = dict()
-            precatorio['arquivo'] = nome_pdf
-
-            for page in pdf.pages:
-                texto_pagina = page.extract_text_lines()
-
-                for linhas in texto_pagina:
-                    texto = linhas['text']
-
-                    if len(precatorio) == 8:
-                        valores_nao_nulos = all(valor is not None for valor in precatorio.values())
-                        processo = re.sub('\D+', '', str(precatorio.get('num_autos')))
-                        if valores_nao_nulos and processo in processos:
+            
+            for index_page, page in enumerate(pdf):
+                texto_pagina = page.get_text("text").split('\n')  # Extrai o texto da página divido em lista
+                
+                for linha_pagina in texto_pagina:
+                    texto = linha_pagina.strip()
+                    chave_processo = re.sub('\D+', '', texto)
+                    if chave_processo in processos:
+                        precatorio['num_autos'] = texto
+                        pagina = index_page + 1
+                    
+                    if precatorio:
+                        # Adiciona os dados ao arquivo excel
+                        if len(precatorio) == 7:
+                            precatorio['arquivo'] = nome_pdf
+                            precatorio['pagina'] = pagina
                             escrever_dados(app_dir, precatorio)
-                            processos.remove(processo)
-                            precatorio.clear
-                    
-                    if re.match('^(ordem.*pagamento\:)', texto, flags=re.I):
-                        ordem_pagamento = re.search('\d+', texto)
-                        num_processo = re.search('\d{7}\-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}', texto)
-                        precatorio['ordem_pagamento'] = ordem_pagamento.group().strip() if ordem_pagamento else None
-                        precatorio['num_processo'] = num_processo.group().strip() if num_processo else None
-                    
-                    if (re.match('^(natureza\:)', texto, re.I)):
-                        natureza = re.search('\s.*', texto)
-                        precatorio['natureza'] = natureza.group().strip() if natureza else None
+                            precatorio.clear() # Limpa o dicionário após salvar em excel
+
+                        # Processo
+                        if not chave_processo in processos and re.match('\d{7}\-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}', texto):
+                            precatorio['num_processo'] = texto.strip()
                         
-                    if (re.match('^(n.*de autos\:)', texto, re.I)):
-                        num_autos = re.search('\d{7}\-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}', texto)
-                        ordem_orcamentaria = re.search('\d\/\d{4}', texto)
-                        suspenso = re.search('(\s[a-z])$', texto, re.I)
+                        # Natureza
+                        if re.match('^(alimentar)|^(outras\s*esp[ée]cies)$', texto, re.I):
+                            precatorio['natureza'] = texto
 
-                        precatorio['num_autos'] = num_autos.group().strip() if num_autos else None
-                        precatorio['ordem_orcamentaria'] = ordem_orcamentaria.group() if ordem_orcamentaria else None
-                        precatorio['suspenso'] = suspenso.group().strip() if suspenso else None
-                    
-                    if (re.match('^(data.*protocolo\:)', texto, re.I)):
-                        data_protocolo = re.findall('\d{2}\/\d{2}\/\d{4}', texto)
-                        if data_protocolo:
-                            data_objeto = datetime.strptime(data_protocolo[0], r'%d/%m/%Y')
-                            precatorio['data_protocolo'] = data_objeto
-
+                        # Ordem orçamentária
+                        if re.match('^(\d+\/\d{4})$', texto):
+                            precatorio['ordem_orcamentaria'] = texto
+                        
+                        # Suspenso?                      
+                        if re.match('^(suspenso)\W+\s([ns])$', texto, re.I):
+                            suspenso = texto.split()
+                            precatorio['suspenso'] = suspenso[1]
+                        
+                        # Data protocolo
+                        if re.match('^(\d{2}\/\d{2}\/\d{4})', texto):
+                            data_protocolo = re.search('(\d{2}\/\d{2}\/\d{4})', texto)
+                            data_objeto = datetime.strptime(data_protocolo.group(), r'%d/%m/%Y')
+                            precatorio['data_protocolo'] = data_objeto             
+                        
+                        # Devedora
+                        if com_devedora:
+                            precatorio['devedora'] = texto
+                            com_devedora = None
+                        com_devedora = re.match('^(devedora\:)$', texto, re.I)
+    
 
 def verificar_arquivos(app_dir:str):
     nomes_pastas = ['arquivos', 'logs', 'temp']
@@ -146,6 +161,8 @@ def escrever_dados(app_dir:str, precatorio:dict):
                 em_uso = False
         except IOError:
             print('Feche o Arquivo para eu poder salvar novos dados')
+            sys.stdout.write("\033[F")  # Volta uma linha
+            sys.stdout.write("\033[K")  # Limpa a linha atual
 
     # Carregar o arquivo existente
     workbook = load_workbook(file_path)
@@ -164,8 +181,9 @@ def escrever_dados(app_dir:str, precatorio:dict):
         precatorio.get('suspenso'),
         # precatorio.get('data_protocolo'),
         data_formatada.strftime("%d/%m/%Y") if data_formatada else '',
+        precatorio.get('devedora'),
         precatorio.get('arquivo'),
-        precatorio.get('ordem_pagamento'),
+        precatorio.get('pagina'),
     ]
     
     # Identificar a próxima linha disponível
@@ -188,7 +206,7 @@ def criar_arquivo_excel(app_dir:str, num_file:str=''):
     sheet.title = 'Dados'  # Nome da planilha
 
     # Definir os rótulos das colunas
-    headers = ['Autos', 'Processo', 'Natureza', 'Ordem orçamentária', 'Suspenso?', 'Data do Protocolo', 'Arquivo', 'Ordem de Pagamento']
+    headers = ['Autos', 'Processo', 'Natureza', 'Ordem orçamentária', 'Suspenso?', 'Data do Protocolo', 'Devedora', 'Arquivo', 'Página']
 
     # Adicionar os rótulos com formatação em negrito
     bold_font = Font(bold=True)
@@ -197,13 +215,13 @@ def criar_arquivo_excel(app_dir:str, num_file:str=''):
         cell.font = bold_font
 
     # Definir largura específica para as colunas
-    column_widths = [24, 24, 17, 9, 9, 14, 37]  # Largura das colunas (ajuste conforme necessário)
+    column_widths = [24, 24, 17, 20, 9, 14, 60, 37]  # Largura das colunas (ajuste conforme necessário)
     for col_index, width in enumerate(column_widths, start=1):
         column_letter = sheet.cell(row=1, column=col_index).column_letter
         sheet.column_dimensions[column_letter].width = width
 
     # Aplicar auto filtro aos rótulos
-    sheet.auto_filter.ref = f"A1:H1"  # Ajuste o intervalo conforme o número de colunas
+    sheet.auto_filter.ref = f"A1:I1"  # Ajuste o intervalo conforme o número de colunas
 
     # Congelar a primeira linha
     sheet.freeze_panes = "A2"  # Congela a linha acima da célula especificada (neste caso, a linha 1)

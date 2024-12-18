@@ -1,8 +1,10 @@
 Projeto: Verificar Andamento de Processos de Precatórios
 
-Visão Geral
+VISÃO GERAL
     Este projeto foi desenvolvido para monitorar, organizar e analisar o andamento de processos de precatórios. 
     Ele permite a importação de dados sobre os processos, aplica critérios personalizados de análise e gera 
     relatórios para auxiliar na tomada de decisão. O sistema é voltado para advogados, administradores e gestores financeiros que lidam 
     com precatórios em suas atividades diárias.
 
+DEPENDÊNCIAS:
+    Para que este sistema funcione é necessário ter instalado o programa "Tesseract-OCR" para interpretar e ler os Captchas

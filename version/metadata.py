@@ -1,15 +1,16 @@
 from rich import print
 
-__project__ = "FANSTASMA"
+__project__ = "Verificador de precatórios"
 __author__ = "Dom Zeck I"
-__version__ = "2.0.0"
+__version__ = "1.0"
 
 
 def print_project_information():
     """ Imprimir os valores de metadatas"""
     
-    tab = 70
-    print(f"[yellow]" + tab * " " + "*" * 33)
+    tab = 5
+    num_asteriscos = 50
+    print(f"[yellow]" + tab * " " + "*" * num_asteriscos)
 
     text = f"       Projeto: [bold cyan]{__project__}[/bold cyan]"
     text = f"{text}{' ' * (39 - len(text))}"
@@ -23,7 +24,7 @@ def print_project_information():
     text = f"{text}{' ' * (39 - len(text))}"
     print(tab * " " + text)
 
-    print("[yellow]" + tab * " " + "*" * 33)
+    print("[yellow]" + tab * " " + "*" * num_asteriscos)
 
 if __name__ == "__main__":
     print_project_information()

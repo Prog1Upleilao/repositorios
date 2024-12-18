@@ -9,7 +9,7 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
-from PIL import Image
+from PIL import Image # pillow
 
 from utils.eventos import registrar_evento
 
@@ -28,8 +28,8 @@ class WebDriver:
             chrome_options.add_argument("--headless")  # Ativa o modo headless
         
         # Desabilitar automação para evitar ser detectado como bot
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
+        
         """ Caso ocorra erro de conexão, verifique o site abaixo está disponível 
         https://googlechromelabs.github.io/chrome-for-testing/latest-patch-versions-per-build.json
         """

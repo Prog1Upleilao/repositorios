@@ -31,37 +31,38 @@ def baixar_pagamentos_pendentes(app_dir:str, driver:WebDriver, entidades:pd.Data
         baixado = False
         
         for i in range(0, 10):
-
-            if i < 5: # Tenta ler os captchas pela lista
-                captcha = captchas.loc[int(num), 'captcha']
-            else:
-                # Caso o captcha não esteja na lista o sistema tenta ler por OCR
-                captcha_dir = os.path.join(app_dir, 'temp', 'captcha.png')
-                captcha_path = driver.image_download('css', '[id="captchaImage"] > img', captcha_dir)
-                captcha = descaptchar(captcha_path) if captcha_path is not None else ''
-                while captcha == '':
-                    driver.refresh()
+            try:
+                if i < 5: # Tenta ler os captchas pela lista
+                    captcha = captchas.loc[int(num), 'captcha']
+                else:
+                    # Caso o captcha não esteja na lista o sistema tenta ler por OCR
+                    captcha_dir = os.path.join(app_dir, 'temp', 'captcha.png')
                     captcha_path = driver.image_download('css', '[id="captchaImage"] > img', captcha_dir)
                     captcha = descaptchar(captcha_path) if captcha_path is not None else ''
+                    while captcha == '':
+                        driver.refresh()
+                        captcha_path = driver.image_download('css', '[id="captchaImage"] > img', captcha_dir)
+                        captcha = descaptchar(captcha_path) if captcha_path is not None else ''
 
-            driver.write_text('id', '_cfield', captcha)
-            
-            time.sleep(2)
-            
-            driver.select_by_value('id', 'vENT_ID', str(index))
-            time.sleep(0.666)
+                driver.write_text('id', '_cfield', captcha)
+                time.sleep(2)          
+                
+                driver.select_by_value('id', 'vENT_ID', str(index))
+                time.sleep(0.666)
 
-            driver.btn_click('name', 'BUTTON3')
-            com_erro = driver.element_exists('class', 'gx-warning-message', 0.666)
+                driver.btn_click('name', 'BUTTON3')
+                com_erro = driver.element_exists('class', 'gx-warning-message', 0.666)
 
-            if not com_erro:
-                baixado = True
-                break
+                if not com_erro:
+                    baixado = True
+                    break
 
-            driver.refresh()
+                driver.refresh()
+            except Exception as err:
+                registrar_evento(err)
 
-        if not baixado:
-            print(row['Entidade'])
+            if not baixado:
+                registrar_evento(f"Erro ao tentar baixar {row['Entidade']}")
 
 
 def baixar_pagamentos_efetuados(driver:WebDriver, entidades:pd.DataFrame, captchas:pd.DataFrame):
