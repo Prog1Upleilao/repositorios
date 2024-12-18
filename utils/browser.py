@@ -1,4 +1,5 @@
 import os
+import time
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -62,8 +63,9 @@ class WebDriver:
     def refresh(self):
         self.driver.refresh()
 
-    def close_browser(self):
+    def close_browser(self, wait_for_close:float=1.666):
         """Fecha o navegador completamente."""
+        time.sleep(wait_for_close)
         try:
             self.driver.quit()
         except Exception as err:

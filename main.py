@@ -18,7 +18,12 @@ from version.metadata import print_project_information
 def main():
     os.system('cls')
     print_project_information()
-    app_dir = os.path.dirname(os.path.abspath(__file__))
+    if getattr(sys, 'frozen', False):
+        app_dir = os.path.dirname(sys.executable)
+    else:
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+    
+
     if not verificar_arquivos(app_dir):
         return False
     
@@ -38,14 +43,24 @@ def main():
     # Realiza o download dos arquivos .PDFs
     scrape.main(app_dir, cod_entidades, captchas)
     
+    print('scrapou')
+    input('')
+
     print('[bold cyan] -> Descompactando arquivos\n')
     # Descompacta e lê cada arquivo .PDF
     descompacta_arquivos(app_dir)
 
+    print('descompactou')
+    input('')
+
     print('[bold cyan] -> Lendo arquivos baixados\n')
     ler_dados_pdf(app_dir, processos)
 
+    print('dadou')
+    input('')
+    
     print('[bold blue]***** FIM DO PROCESSO *****')
+    
 
 
 def descompacta_arquivos(app_dir:str)->list:

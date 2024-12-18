@@ -18,7 +18,7 @@ URL_EFETUADOS = "https://www.tjsp.jus.br/cac/scp/webrelpubliclstpagprecatefetuad
 def main(app_dir:str, cod_entidades:list, captchas:str):
     driver = WebDriver()
     baixar_pagamentos_pendentes(app_dir, driver, cod_entidades, captchas)
-    driver.close_browser()
+    driver.close_browser(6.66)
 
 
 def baixar_pagamentos_pendentes(app_dir:str, driver:WebDriver, entidades:pd.DataFrame, captchas:pd.DataFrame):
@@ -51,6 +51,8 @@ def baixar_pagamentos_pendentes(app_dir:str, driver:WebDriver, entidades:pd.Data
                 time.sleep(0.666)
 
                 driver.btn_click('name', 'BUTTON3')
+                time.sleep(1.666)
+                
                 com_erro = driver.element_exists('class', 'gx-warning-message', 0.666)
 
                 if not com_erro:
@@ -63,6 +65,8 @@ def baixar_pagamentos_pendentes(app_dir:str, driver:WebDriver, entidades:pd.Data
 
             if not baixado:
                 registrar_evento(f"Erro ao tentar baixar {row['Entidade']}")
+
+    time.sleep(1.666)
 
 
 def baixar_pagamentos_efetuados(driver:WebDriver, entidades:pd.DataFrame, captchas:pd.DataFrame):
